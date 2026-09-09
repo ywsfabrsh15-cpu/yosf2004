@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة متابعة وحساب المعدل التراكمي الأكاديمي</title>
+    <!-- خط Tajawal -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <!-- أيقونات Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- مكتبة Chart.js للرسم البياني -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-solid fa-chart-line"></i>
+                <h1>متابِع الأداء الأكاديمي <span>GPA Tracker</span></h1>
+            </div>
+            <p>حساب دقيق للمعدل التراكمي، رسم بياني للتقدم الأكاديمي، وحاسبة الهدف المستقبلية</p>
+        </header>
+
+        <div class="grid-layout">
+            <!-- القسم الأيسر / العلوي: إدخال البيانات -->
+            <main class="main-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-book-open"></i> قائمة المواد الدراسية</h2>
+                        <button id="clearAllBtn" class="btn btn-outline-danger"><i class="fa-solid fa-rotate-right"></i> إعادة ضبط</button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="gpaTable">
+                            <thead>
+                                <tr>
+                                    <th>اسم المادة</th>
+                                    <th>الدرجة (100)</th>
+                                    <th>التقدير</th>
+                                    <th>النقاط</th>
+                                    <th>الساعات</th>
+                                    <th>حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="subjectsContainer">
+                                <!-- تضاف الخانات بالسوفتوير -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="actions-bar">
+                        <button id="addSubjectBtn" class="btn btn-secondary">
+                            <i class="fa-solid fa-plus"></i> إضافة مادة جديدة
+                        </button>
+                    </div>
+                </div>
+
+                <!-- قسم الرسم البياني للتقدم الأكاديمي -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-chart-area"></i> رسم بياني للتقدم الأكاديمي بالمواد</h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="progressChart"></canvas>
+                    </div>
+                </div>
+            </main>
+
+            <!-- القسم الأيمن: النتائج والأدوات المتقدمة -->
+            <aside class="sidebar">
+                <!-- بطاقة ملخص النتائج -->
+                <div class="card result-card">
+                    <h2>ملخص المعدل</h2>
+                    <div class="gpa-badge">
+                        <span id="gpaValue">0.00</span>
+                        <small>/ 4.00</small>
+                    </div>
+                    <div class="status-pill" id="statusPill">التقدير: -</div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">إجمالي الساعات</span>
+                            <span class="stat-value" id="totalHours">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">مجموع النقاط</span>
+                            <span class="stat-value" id="totalPoints">0.00</span>
+                        </div>
+                    </div>
+
+                    <button id="printBtn" class="btn btn-primary btn-full">
+                        <i class="fa-solid fa-file-pdf"></i> طباعة / تصدير التقرير
+                    </button>
+                </div>
+
+                <!-- ميزة حاسبة الوصول للهدف المستقبلي -->
+                <div class="card target-card">
+                    <h2><i class="fa-solid fa-bullseye"></i> حاسبة المعدل المستهدف</h2>
+                    <p class="target-desc">احسب كم تحتاج في الفصل القادم لتحقيق معدل معين</p>
+                    <div class="form-group">
+                        <label>المعدل المستهدف (من 4.00):</label>
+                        <input type="number" id="targetGPA" min="0" max="4" step="0.01" placeholder="مثلاً: 3.5">
+                    </div>
+                    <div class="form-group">
+                        <label>عدد الساعات في الفصل القادم:</label>
+                        <input type="number" id="nextHours" min="1" placeholder="مثلاً: 15">
+                    </div>
+                    <button id="calcTargetBtn" class="btn btn-accent btn-full">احسب المطلوب</button>
+                    <div id="targetResult" class="target-result"></div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const subjectsContainer = document.getElementById('subjectsContainer');
+            const addSubjectBtn = document.getElementById('addSubjectBtn');
+            const clearAllBtn = document.getElementById('clearAllBtn');
+            const gpaValue = document.getElementById('gpaValue');
+            const statusPill = document.getElementById('statusPill');
+            const totalHoursEl = document.getElementById('totalHours');
+            const totalPointsEl = document.getElementById('totalPoints');
+            const printBtn = document.getElementById('printBtn');
+
+            // الرسم البياني (Chart.js)
+            let progressChart;
+            initChart();
+
+            // سلم الدرجات والنقاط
+            const gradeScale = [{
+                letter: 'A+',
+                min: 95,
+                points: 4.0
+            }, {
+                letter: 'A',
+                min: 90,
+                points: 3.75
+            }, {
+                letter: 'B+',
+                min: 85,
+                points: 3.5
+            }, {
+                letter: 'B',
+                min: 80,
+                points: 3.0
+            }, {
+                letter: 'C+',
+                min: 75,
+                points: 2.5
+            }, {
+                letter: 'C',
+                min: 70,
+                points: 2.0
+            }, {
+                letter: 'D+',
+                min: 65,
+                points: 1.5
+            }, {
+                letter: 'D',
+                min: 60,
+                points: 1.0
+            }, {
+                letter: 'F',
+                min: 0,
+                points: 0.0
+            }];
+
+            function getGradeFromScore(score) {
+                if (isNaN(score)) return {
+                    letter: '-',
+                    points: 0.0
+                };
+                return gradeScale.find(scale => score >= scale.min) || {
+                    letter: 'F',
+                    points: 0.0
+                };
+            }
+
+            // إضافة صف جديد
+            function createSubjectRow(name = '', score = '', hours = 3) {
+                const tr = document.createElement('tr');
+                const gradeInfo = getGradeFromScore(parseFloat(score));
+
+                tr.innerHTML = `
+            <td><input type="text" value="${name}" placeholder="اسم المادة" class="sub-name"></td>
+            <td><input type="number" min="0" max="100" value="${score}" placeholder="100-0" class="sub-score"></td>
+            <td><span class="grade-letter">${gradeInfo.letter}</span></td>
+            <td><span class="points-val">${gradeInfo.points.toFixed(2)}</span></td>
+            <td><input type="number" min="1" max="10" value="${hours}" class="sub-hours"></td>
+            <td><button class="btn btn-icon-danger delete-btn"><i class="fa-solid fa-trash"></i></button></td>
+        `;
+
+                // الأحداث داخل الخانات
+                const scoreInput = tr.querySelector('.sub-score');
+                const nameInput = tr.querySelector('.sub-name');
+                const hoursInput = tr.querySelector('.sub-hours');
+                const gradeLetter = tr.querySelector('.grade-letter');
+                const pointsVal = tr.querySelector('.points-val');
+
+                function updateRow() {
+                    const val = parseFloat(scoreInput.value);
+                    const info = getGradeFromScore(val);
+                    gradeLetter.textContent = info.letter;
+                    pointsVal.textContent = info.points.toFixed(2);
+                    calculateGPA();
+                }
+
+                scoreInput.addEventListener('input', updateRow);
+                hoursInput.addEventListener('input', calculateGPA);
+                nameInput.addEventListener('input', calculateGPA);
+
+                tr.querySelector('.delete-btn').addEventListener('click', () => {
+                    tr.remove();
+                    calculateGPA();
+                });
+
+                subjectsContainer.appendChild(tr);
+                calculateGPA();
+            }
+
+            // حساب المعدل العام وتحديث التقرير والبيانات
+            function calculateGPA() {
+                const rows = subjectsContainer.querySelectorAll('tr');
+                let totalPts = 0;
+                let totalHrs = 0;
+                let chartLabels = [];
+                let chartData = [];
+
+                rows.forEach((row, index) => {
+                    const name = row.querySelector('.sub-name').value || `مادة ${index + 1}`;
+                    const score = parseFloat(row.querySelector('.sub-score').value);
+                    const hours = parseFloat(row.querySelector('.sub-hours').value) || 0;
+
+                    if (!isNaN(score) && hours > 0) {
+                        const info = getGradeFromScore(score);
+                        totalPts += info.points * hours;
+                        totalHrs += hours;
+
+                        chartLabels.push(name);
+                        chartData.push(info.points);
+                    }
+                });
+
+                let gpa = totalHrs > 0 ? (totalPts / totalHrs) : 0;
+
+                gpaValue.textContent = gpa.toFixed(2);
+                totalHoursEl.textContent = totalHrs;
+                totalPointsEl.textContent = totalPts.toFixed(2);
+
+                // التقدير العام
+                if (gpa >= 3.5) statusPill.textContent = "التقدير: ممتاز 🎉";
+                else if (gpa >= 3.0) statusPill.textContent = "التقدير: جيد جداً 👍";
+                else if (gpa >= 2.5) statusPill.textContent = "التقدير: جيد 🟢";
+                else if (gpa >= 2.0) statusPill.textContent = "التقدير: مقبول 🟠";
+                else statusPill.textContent = "التقدير: غير مستوفٍ 🔴";
+
+                // تحديث الرسم البياني
+                updateChart(chartLabels, chartData);
+
+                // حفظ البيانات تلقائياً
+                saveToLocalStorage();
+            }
+
+            // التهيئة التناظرية للرسم البياني
+            function initChart() {
+                const ctx = document.getElementById('progressChart').getContext('2d');
+                progressChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'نقاط المادة (من 4.0)',
+                            data: [],
+                            borderColor: '#38bdf8',
+                            backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                            fill: true,
+                            tension: 0.3,
+                            borderWidth: 3,
+                            pointBackgroundColor: '#8b5cf6',
+                            pointRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                min: 0,
+                                max: 4,
+                                ticks: {
+                                    color: '#94a3b8'
+                                },
+                                grid: {
+                                    color: '#232d42'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: '#94a3b8'
+                                },
+                                grid: {
+                                    color: '#232d42'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#f8fafc',
+                                    font: {
+                                        family: 'Tajawal'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateChart(labels, data) {
+                progressChart.data.labels = labels;
+                progressChart.data.datasets[0].data = data;
+                progressChart.update();
+            }
+
+            // حاسبة المعدل المستهدف
+            document.getElementById('calcTargetBtn').addEventListener('click', () => {
+                const targetGPA = parseFloat(document.getElementById('targetGPA').value);
+                const nextHours = parseFloat(document.getElementById('nextHours').value);
+                const targetResult = document.getElementById('targetResult');
+
+                const currentHours = parseFloat(totalHoursEl.textContent);
+                const currentPoints = parseFloat(totalPointsEl.textContent);
+
+                if (isNaN(targetGPA) || isNaN(nextHours) || targetGPA > 4 || targetGPA < 0) {
+                    targetResult.style.color = '#ef4444';
+                    targetResult.textContent = 'يرجى إدخال قيم صحيحة للهدف والساعات!';
+                    return;
+                }
+
+                const totalRequiredPoints = targetGPA * (currentHours + nextHours);
+                const neededPointsInNextSemester = totalRequiredPoints - currentPoints;
+                const neededGPA = neededPointsInNextSemester / nextHours;
+
+                if (neededGPA > 4.0) {
+                    targetResult.style.color = '#ef4444';
+                    targetResult.textContent = `مستحيل! تتطلب معدل ${neededGPA.toFixed(2)} للفصل القادم وهو أكثر من 4.00.`;
+                } else if (neededGPA < 0) {
+                    targetResult.style.color = '#22c55e';
+                    targetResult.textContent = `حققت هدفك بالفعل! لا تحتااج أي معدل معين.`;
+                } else {
+                    targetResult.style.color = '#38bdf8';
+                    targetResult.textContent = `أنت بحاجة لتحقيق معدل فصل (${neededGPA.toFixed(2)}) في الفصل القادم للوصول لهدفك.`;
+                }
+            });
+
+            // LocalStorage
+            function saveToLocalStorage() {
+                const rows = subjectsContainer.querySelectorAll('tr');
+                let data = [];
+                rows.forEach(row => {
+                    data.push({
+                        name: row.querySelector('.sub-name').value,
+                        score: row.querySelector('.sub-score').value,
+                        hours: row.querySelector('.sub-hours').value
+                    });
+                });
+                localStorage.setItem('gpaTrackerData', JSON.stringify(data));
+            }
+
+            function loadFromLocalStorage() {
+                const saved = localStorage.getItem('gpaTrackerData');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    if (data.length > 0) {
+                        data.forEach(item => createSubjectRow(item.name, item.score, item.hours));
+                        return;
+                    }
+                }
+                // افتراضي
+                createSubjectRow('برمجة الحاسوب', 92, 3);
+                createSubjectRow('الرياضيات 1', 84, 3);
+                createSubjectRow('الفيزياء العام', 78, 4);
+            }
+
+            addSubjectBtn.addEventListener('click', () => createSubjectRow());
+            clearAllBtn.addEventListener('click', () => {
+                if (confirm('هل انت أصل من مسح كافة المواد؟')) {
+                    subjectsContainer.innerHTML = '';
+                    calculateGPA();
+                }
+            });
+
+            printBtn.addEventListener('click', () => window.print());
+
+            loadFromLocalStorage();
+        });
+    </script>
+    <style>
+         :root {
+            --bg-dark: #0b0f19;
+            --card-bg: #151c2c;
+            --border-color: #232d42;
+            --primary: #38bdf8;
+            --primary-hover: #0284c7;
+            --accent: #8b5cf6;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #22c55e;
+            --danger: #ef4444;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Tajawal', sans-serif;
+        }
+        
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .app-container {
+            width: 100%;
+            max-width: 1200px;
+        }
+        
+        .app-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .app-header .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .app-header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+        }
+        
+        .app-header h1 span {
+            color: var(--primary);
+        }
+        
+        .app-header p {
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+        
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 20px;
+        }
+        
+        @media (max-width: 900px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .card-header h2 {
+            font-size: 1.2rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th,
+        td {
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        th {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        input,
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            text-align: center;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+        
+        input:focus,
+        select:focus {
+            border-color: var(--primary);
+        }
+        
+        .points-val {
+            font-weight: bold;
+            color: var(--success);
+        }
+        
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            color: #000;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            color: #fff;
+        }
+        
+        .btn-secondary {
+            background-color: var(--border-color);
+            color: var(--text-main);
+        }
+        
+        .btn-secondary:hover {
+            background-color: #334155;
+        }
+        
+        .btn-accent {
+            background-color: var(--accent);
+            color: #fff;
+        }
+        
+        .btn-accent:hover {
+            filter: brightness(1.2);
+        }
+        
+        .btn-outline-danger {
+            background: transparent;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+        
+        .btn-outline-danger:hover {
+            background: var(--danger);
+            color: #fff;
+        }
+        
+        .btn-icon-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+        
+        .btn-icon-danger:hover {
+            background: var(--danger);
+            color: #fff;
+        }
+        
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .actions-bar {
+            margin-top: 15px;
+        }
+        /* Chart Styling */
+        
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+        /* Sidebar & Result Card */
+        
+        .result-card {
+            text-align: center;
+        }
+        
+        .gpa-badge {
+            margin: 15px 0;
+        }
+        
+        .gpa-badge #gpaValue {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+        
+        .status-pill {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            background: var(--border-color);
+            font-size: 0.95rem;
+            margin-bottom: 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            background: var(--bg-dark);
+            padding: 12px;
+            border-radius: 10px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        /* Target Card */
+        
+        .target-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        
+        .form-group {
+            text-align: right;
+            margin-bottom: 10px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        
+        .target-result {
+            margin-top: 12px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 0.95rem;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            .sidebar,
+            .actions-bar,
+            .btn,
+            .card-header button {
+                display: none !important;
+            }
+            .grid-layout {
+                display: block;
+            }
+            .card {
+                border: 1px solid #ccc;
+                box-shadow: none;
+                background: white;
+                color: black;
+            }
+            input,
+            select {
+                border: none;
+                background: transparent;
+                color: black;
+            }
+        }
+    </style>
+</body>
+
+</html>
